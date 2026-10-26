@@ -27,7 +27,7 @@ python -m app.main
 
 | Переменная | Значение по умолчанию | Смысл |
 |------------|----------------------|-------|
-| `NN_DATA_PATH` | `data/input/mlp_dataset.csv` | путь к CSV с данными |
+| `NN_DATASET_PATH` | `data/input/mlp_dataset.csv` | путь к CSV с данными |
 | `NN_TEST_RATIO` | `0.2` | доля тестовой выборки |
 | `NN_WEIGHTS_PATH` | `data/output/part1_weights.json` | файл для весов |
 | `NN_PLOT_PATH` | `logs/part1_loss.png` | файл для графика ошибки |

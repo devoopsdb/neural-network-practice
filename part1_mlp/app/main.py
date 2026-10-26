@@ -170,7 +170,7 @@ class ConsoleApp:
     # ------------------------------------------------------------------
     def _load_dataset(self) -> None:
         """Загружает CSV, делит выборку и нормализует признаки."""
-        default_path = os.getenv("NN_DATA_PATH") or str(DEFAULT_DATA)
+        default_path = os.getenv("NN_DATASET_PATH") or str(DEFAULT_DATA)
         path = read_text("Путь к CSV-файлу", default_path)
         ratio = read_float(
             "Доля тестовой выборки",
@@ -248,7 +248,10 @@ class ConsoleApp:
             normalized = self.dataset.transform(np.array(features))
             self._print_prediction(network, normalized)
         elif choice == "2":
-            path = read_text("Путь к CSV с примерами", "data/input/examples.csv")
+            path = read_text(
+                "Путь к CSV с примерами",
+                str(PROJECT_ROOT / "data" / "input" / "examples.csv"),
+            )
             examples = self._read_examples(path)
             normalized = self.dataset.transform(examples)
             for index, row in enumerate(normalized, start=1):
