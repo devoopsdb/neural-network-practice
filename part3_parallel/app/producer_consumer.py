@@ -144,6 +144,7 @@ class ParallelPipeline:
         self._processed = 0
         self._skipped = 0
         self._results: dict[int, np.ndarray] = {}
+        self._errors: list[str] = []
 
     # ------------------------------------------------------------------
     # вспомогательные потоки
@@ -176,6 +177,11 @@ class ParallelPipeline:
                     self._skipped += 1
                 self.logger.warning("Пропущен файл: %s", error)
                 continue
+            except Exception as error:  # noqa: BLE001 - поток не должен умирать молча
+                with self._counter_lock:
+                    self._skipped += 1
+                self.logger.exception("Непредвиденная ошибка чтения %s: %s", path, error)
+                continue
             with self._counter_lock:
                 index = self._processed
                 self._processed += 1
@@ -192,20 +198,37 @@ class ParallelPipeline:
     # ------------------------------------------------------------------
     def _collect(self, indexes: list[int], augmented: np.ndarray) -> None:
         """Callback пула процессов: раскладывает пачку результатов по местам."""
-        prepared = np.asarray(augmented)
+        try:
+            prepared = np.asarray(augmented)
+            with self._results_lock:
+                for position, index in enumerate(indexes):
+                    self._results[index] = prepared[position]
+        except Exception as error:  # noqa: BLE001 - callback не должен падать молча
+            self._collect_error(error)
+
+    def _collect_error(self, error: BaseException) -> None:
+        """Error callback пула: запоминает сбой задачи, чтобы не потерять его."""
+        message = f"{type(error).__name__}: {error}"
         with self._results_lock:
-            for position, index in enumerate(indexes):
-                self._results[index] = prepared[position]
+            self._errors.append(message)
+        self.logger.error("Ошибка в пуле процессов: %s", message)
 
     def _submit(
         self, pool: PoolProcesses, indexes: list[int], arrays: list[np.ndarray]
     ) -> None:
         """Отправляет пачку изображений в пул одним заданием."""
+        shapes = {array.shape for array in arrays}
+        if len(shapes) > 1:
+            raise PipelineError(
+                "В одной пачке изображения разной формы: "
+                + ", ".join(str(shape) for shape in sorted(shapes))
+            )
         stacked = np.stack(arrays)
         pool.apply_async(
             augment_chunk,
             args=(stacked, min(indexes) * 1000 + 1, self.operations),
             callback=partial(self._collect, list(indexes)),
+            error_callback=self._collect_error,
         )
 
     def run(
@@ -223,6 +246,7 @@ class ParallelPipeline:
         self._processed = 0
         self._skipped = 0
         self._results = {}
+        self._errors = []
 
         path_queue: queue.Queue = queue.Queue(maxsize=DEFAULT_QUEUE_SIZE)
         array_queue: queue.Queue = queue.Queue(maxsize=DEFAULT_QUEUE_SIZE // 2)
@@ -256,7 +280,14 @@ class ParallelPipeline:
             batch_indexes: list[int] = []
             batch_arrays: list[np.ndarray] = []
             while finished < self.workers:
-                item = array_queue.get()
+                try:
+                    item = array_queue.get(timeout=1.0)
+                except queue.Empty:
+                    if any(not consumer.is_alive() for consumer in consumers):
+                        raise PipelineError(
+                            "Поток-потребитель завершился аварийно, обработка прервана."
+                        )
+                    continue
                 if item is SENTINEL:
                     finished += 1
                     if batch_arrays:
@@ -277,6 +308,8 @@ class ParallelPipeline:
             pool.join()
 
         total_seconds = time.perf_counter() - started
+        if self._errors:
+            raise PipelineError("Сбой в пуле процессов: " + self._errors[0])
         if not self._results:
             raise PipelineError("Ни один файл не удалось обработать.")
         ordered = [self._results[index] for index in sorted(self._results)]

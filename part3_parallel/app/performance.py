@@ -17,6 +17,7 @@ import numpy as np
 from .augment import OPERATIONS, from_uint8, to_uint8
 from .producer_consumer import (
     ParallelPipeline,
+    PipelineError,
     PipelineStats,
     augment_chunk,
     run_sequential,
@@ -125,7 +126,7 @@ def compare(
     log.info("Параллельная версия: %.3f с", parallel_stats.seconds)
 
     if sequential_data.shape != parallel_data.shape:
-        raise ValueError(
+        raise PipelineError(
             "Формы результатов не совпадают: "
             f"{sequential_data.shape} и {parallel_data.shape}"
         )
@@ -150,7 +151,9 @@ def save_report(report: dict[str, object], target: Path) -> Path:
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     except OSError as error:
-        raise ValueError(f"Не удалось сохранить отчёт {destination}: {error}") from error
+        raise PipelineError(
+            f"Не удалось сохранить отчёт {destination}: {error}"
+        ) from error
     return destination
 
 
@@ -201,5 +204,7 @@ def save_dataset(dataset: np.ndarray, target: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
         np.save(destination, dataset)
     except OSError as error:
-        raise ValueError(f"Не удалось сохранить данные {destination}: {error}") from error
+        raise PipelineError(
+            f"Не удалось сохранить данные {destination}: {error}"
+        ) from error
     return destination
