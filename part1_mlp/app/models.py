@@ -152,7 +152,7 @@ class NeuralNetwork:
 
     def _activation_name(self, layer_index: int) -> str:
         """Возвращает имя активации для слоя с указанным индексом."""
-        if layer_index == len(self.weights) - 1:
+        if layer_index == len(self.layer_sizes) - 2:
             return self.output_activation
         return self.activation
 
@@ -343,6 +343,7 @@ class NeuralNetwork:
             payload = json.loads(source.read_text(encoding="utf-8"))
             sizes = [int(size) for size in payload["layer_sizes"]]
             activation = str(payload["activation"])
+            output_activation = str(payload.get("output_activation", activation))
             matrices = [
                 [np.asarray(layer["matrix"], dtype=float),
                  np.asarray(layer["bias"], dtype=float)]
@@ -364,6 +365,7 @@ class NeuralNetwork:
                     f"Форма весов слоя {index + 1} в файле не совпадает с сетью."
                 )
         self.activation = self._validate_activation(activation)
+        self.output_activation = self._validate_activation(output_activation)
         self.weights = matrices
 
     def describe(self) -> list[str]:
