@@ -184,7 +184,24 @@ class DataScanner:
                 "Файлы дают массивы разной формы: "
                 + ", ".join(str(shape) for shape in sorted(shapes))
             )
-        return np.stack(arrays), skipped
+        stacked = np.stack(arrays)
+        if all(path.suffix.lower() in TABLE_EXTENSIONS for path in files):
+            stacked = self._minmax_columns(stacked)
+        return stacked, skipped
+
+    @staticmethod
+    def _minmax_columns(array: np.ndarray) -> np.ndarray:
+        """Приводит каждый столбец таблицы к диапазону [0, 1].
+
+        Изображения нормализуются делением на 255 при чтении, а таблицы
+        удобнее масштабировать по минимуму и максимуму столбца, иначе
+        признаки вроде напряжения и температуры остаются в разных шкалах.
+        """
+        flat = array.reshape(-1, array.shape[-1]).astype(np.float32)
+        low = flat.min(axis=0)
+        high = flat.max(axis=0)
+        span = np.where(high - low == 0.0, 1.0, high - low)
+        return ((flat - low) / span).reshape(array.shape).astype(np.float32)
 
     @staticmethod
     def save(array: np.ndarray, target: Path) -> Path:
