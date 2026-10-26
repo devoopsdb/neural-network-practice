@@ -1,0 +1,23 @@
+# виртуальное окружение
+.venv/
+venv/
+
+# служебные файлы Python
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+
+# сгенерированные данные и результаты
+data/input/images/
+data/input/aug_images/
+data/output/
+logs/
+*.npy
+
+# локальная конфигурация
+.env
+
+# IDE
+.idea/
+.vscode/
